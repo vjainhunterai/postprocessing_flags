@@ -1,0 +1,10 @@
+update anomaly.duplicate_ap_invoice  a 
+ inner join   (select distinct Matched_Record_Number 
+ from(  with anomaly_data as (select d.*
+ from anomaly.duplicate_ap_invoice d  )  select t1.* from anomaly_data t1   join anomaly_data t2  
+ on t1.Supplier_Invoice_Number = t2.Supplier_Invoice_Number  
+ and t1.Invoice_Date = t2.Invoice_Date  and t1.Matched_Record_Number = t2.Matched_Record_Number 
+ and t1.INVOICE_AMOUNT = t2.INVOICE_AMOUNT  and t1.Supplier <> t2.Supplier   
+ order by t1.Supplier_Invoice_Number)as abc   order by Supplier_Invoice_Number) b 
+ on a.Matched_Record_Number = b.Matched_Record_Number  set supplier_error_flag = 1 ;	
+ 
