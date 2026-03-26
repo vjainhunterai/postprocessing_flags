@@ -1,0 +1,4 @@
+update  anomaly.duplicate_ap_invoice  a
+inner join l1_t0004_db.temp_ap_inv  b
+on a.SEQ_NO = b.SEQ_NO
+set a.INVOICE_AMOUNT = b.INVOICE_AMOUNT
