@@ -1,0 +1,109 @@
+---step 1 
+drop  table if exits anomaly.duplicate_ap_invoice_temp3;
+drop table if exits  anomaly.duplicate_ap_invoice_temp4;
+drop table if exits  anomaly.duplicate_ap_invoice_temp5;
+
+
+--step2 
+create table anomaly.duplicate_ap_invoice_temp3 as
+select a.*, b.INVOICE_AMOUNT from anomaly.duplicate_ap_invoice a
+ inner join l1_t0004_db.temp_ap_inv b
+ on a.SEQ_NO = b.SEQ_NO;
+ 
+ 
+ --step 3
+ create table anomaly.duplicate_ap_invoice_temp4 as
+ select SEQ_NO,SUPPLIERS_INVOICE_NUMBER,
+COALESCE(CAST(REGEXP_REPLACE(SUPPLIERS_INVOICE_NUMBER, '[^0-9]+', '') AS DECIMAL(65, 0)), -99) as cleaned_Supplier_Invoice_Number,
+b.VENDOR_NAME_ALIAS,
+Supplier,
+INVOICE_AMOUNT
+, Invoice_Date from  l1_t0004_db.temp_ap_inv a
+left join l3_dm_db.dim_vendor b 
+on a.Supplier = b.vendor_name
+;
+
+---step4 
+create table anomaly.duplicate_ap_invoice_temp5  as 
+select distinct seq_no,Matched_Record_Number, match_flag from (
+select 
+a.*,
+CASE
+  WHEN cleaned_Supplier_Invoice_Number = B_cleaned_Supplier_Invoice_Number THEN 1
+  WHEN  INVOICE_AMOUNT < 0 AND DATEDIFF(Invoice_Date, B_Invoice_Date) >= 0 THEN 2
+  WHEN  INVOICE_AMOUNT >= 0 AND DATEDIFF(B_Invoice_Date, Invoice_Date) >= 0 THEN 2
+  ELSE 0
+END AS match_flag
+                 
+           
+ from (
+select distinct
+a.*
+, 
+b.SEQ_NO  as B_SEQ_NO,
+row_number() over( partition by a.SEQ_NO, a.Matched_Record_Number order by  
+datediff(a.`Invoice_Date` , b.Invoice_Date) asc ) as rnk1,
+b.Invoice_Date  as B_Invoice_Date ,
+b.cleaned_Supplier_Invoice_Number  as B_cleaned_Supplier_Invoice_Number,
+b.INVOICE_AMOUNT  as B_INVOICE_AMOUNT
+from
+(select 
+a.seq_no,
+a.Supplier_Invoice_Number,
+COALESCE(CAST(REGEXP_REPLACE(Supplier_Invoice_Number, '[^0-9]+', '') AS DECIMAL(65, 0)), -99) as cleaned_Supplier_Invoice_Number,
+VENDOR_NAME_ALIAS,
+Supplier,
+INVOICE_AMOUNT,
+Matched_Record_Number ,
+Reason_Grouped ,
+`Invoice_Date`
+
+ from ( select * from anomaly.duplicate_ap_invoice_temp3) a) a
+ inner join ( select * from anomaly.duplicate_ap_invoice_temp4
+) b
+on  a.Supplier= b.Supplier
+and  -(a.INVOICE_AMOUNT)  =  (b.INVOICE_AMOUNT)
+and a.SEQ_NO <> b.SEQ_NO ) a
+where rnk1= 1 ) a
+
+
+---step 5
+update anomaly.duplicate_ap_invoice  a
+inner join  anomaly.duplicate_ap_invoice_temp5 b 
+on a.seq_no = b.seq_no
+and a.Matched_Record_Number = b.Matched_Record_Number 
+set a.reversal_flag =  b.match_flag  ;
+
+
+
+====
+
+
+--step 6
+update  anomaly.duplicate_ap_invoice
+set reversal_flag = 0 
+where reversal_flag is null;
+
+
+--step7 
+
+drop table if exits anomaly.update_negative_value_reversal ;
+
+--step 8
+create table anomaly.update_negative_value_reversal  as 
+select seq_no from anomaly.duplicate_ap_invoice
+where Matched_Record_Number  in (
+select Matched_Record_Number from (
+select distinct Matched_Record_Number
+from anomaly.duplicate_ap_invoice
+where reversal_flag <> 0 )a ) 
+and reversal_flag = 0
+
+;
+
+--step 9 
+update anomaly.duplicate_ap_invoice a
+inner join  anomaly.update_negative_value_reversal     b
+on a.SEQ_NO = b.SEQ_NO
+set reversal_flag = -1;
+
