@@ -1,0 +1,174 @@
+
+import pandas as pd
+import Levenshtein
+import pandas as pd
+import numpy as np
+from datetime import datetime
+from itertools import count
+from tqdm import tqdm
+import Levenshtein
+import re
+import ast
+import networkx as nx
+from sqlalchemy import create_engine
+import urllib
+import sys
+tqdm.pandas()
+a=pd.DataFrame()
+from itertools import combinations
+import gc
+
+
+
+
+
+def getDataFromDatabase():
+    #a = readEncryptedConfig(r'C:\Users\semen_k\Documents\Notebooks\Encryption_process\Config\Paths.xlsx', 'prod')
+    user = 'admin'
+    pwd = 'Gpoproddb!#!'
+    password = urllib.parse.quote_plus(pwd)
+    ip = 'prod-db.c969yoyq9cyy.us-east-1.rds.amazonaws.com'
+    schema = "anomaly"
+    engine = create_engine('mysql+mysqlconnector://{0}:{1}@{2}/{3}'.format(user, password, ip, schema))
+    query = "SELECT * FROM `anomaly`.`duplicate_ap_invoice`" #Source data
+    with engine.connect() as conn:
+        df = pd.read_sql(query, conn)
+    return df
+df = getDataFromDatabase()
+
+
+
+
+
+df.shape
+
+
+
+
+
+report_rows = []
+for mrn in tqdm(df['Matched_Record_Number'].unique()):
+    subset = df[df['Matched_Record_Number']==mrn]
+    subset_sorted = subset.sort_values(['seq_no'])
+    row = {'Matched_Record_Number':mrn,
+          'seq_no': subset_sorted['seq_no'].tolist()}
+    report_rows.append(row)
+report = pd.DataFrame(report_rows)
+
+
+# In[6]:
+
+
+report['key'] = report.apply( lambda row: (tuple(row['seq_no'])), axis=1)
+report['Overlap'] = report.groupby('key', sort=False).ngroup()
+report.drop(columns=['key'], inplace=True)
+
+
+# In[7]:
+
+
+group = report['Overlap'].value_counts()
+valid_groups = group[group>=2].index
+report = report[report['Overlap'].isin(valid_groups)].reset_index(drop=True).sort_values(by=['Overlap'])
+report['DELETE_OVERLAP'] = None
+report['DELETE_OVERLAP'] = report.duplicated(subset=['Overlap'], keep='first').astype(int)
+report
+
+
+# In[8]:
+
+
+df =df.merge(report[['Matched_Record_Number','Overlap','DELETE_OVERLAP']], on= 'Matched_Record_Number', how='left')
+df
+
+
+# In[9]:
+
+
+print(df.shape)
+df[df['DELETE_OVERLAP']!=1].shape
+
+
+# In[10]:
+
+
+for mrn in tqdm(df['Overlap'].unique()):
+    if pd.notnull(mrn):
+        subset = df[df['Overlap']==mrn]
+        # print(sorted(subset['Reason_Grouped'].unique()))
+        df.loc[df[df['Overlap']==mrn].index, 'Reason_Grouped'] = ', '.join(sorted(subset['Reason_Grouped'].unique()))
+        
+        
+
+
+# In[11]:
+
+
+df = df[df['DELETE_OVERLAP']!=1].reset_index(drop=True)
+df.drop(columns=['Overlap', 'DELETE_OVERLAP'], inplace=True)
+
+
+# In[12]:
+
+
+print(df.shape)
+
+
+# In[ ]:
+
+
+def uploadOutput(output):
+    #a = readEncryptedConfig(r'C:\Users\semen_k\Documents\Notebooks\Encryption_process\Config\Paths.xlsx', 'prod')
+    user = 'admin'
+    pwd = 'Gpoproddb!#!'
+    password = urllib.parse.quote_plus(pwd)
+    ip = 'prod-db.c969yoyq9cyy.us-east-1.rds.amazonaws.com'
+    schema = "anomaly"
+    engine = create_engine('mysql+mysqlconnector://{0}:{1}@{2}/{3}'.format(user, password, ip, schema))
+    table_name = 'duplicate_ap_invoice_chicago_feb2026_overlapping_v4' #output
+    output.to_sql(table_name, con = engine, if_exists='replace', index=False, chunksize=5000)
+
+uploadOutput(df)
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
