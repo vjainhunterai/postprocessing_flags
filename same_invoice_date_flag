@@ -1,0 +1,9 @@
+UPDATE anomaly.duplicate_ap_invoice 
+a SET a.same_invoice_date_flag = CASE      
+WHEN EXISTS (  SELECT 1          
+FROM (  SELECT Matched_Record_Number             
+FROM anomaly.duplicate_ap_invoice
+             GROUP BY Matched_Record_Number            
+ HAVING COUNT(DISTINCT Invoice_Date) = 1         ) t         
+WHERE t.Matched_Record_Number = a.Matched_Record_Number     )     
+ THEN 1 ELSE 0  END ;
