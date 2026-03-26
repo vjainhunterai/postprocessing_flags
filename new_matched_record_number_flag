@@ -1,0 +1,211 @@
+create table  anomaly.`duplicate_ap_invoice`
+select * from 
+(
+
+WITH grouped_invoice_sets AS (
+  SELECT 
+    Reason_Grouped,
+    Matched_Record_Number,
+    GROUP_CONCAT( distinct Supplier_Invoice_Number ORDER BY Supplier_Invoice_Number SEPARATOR ',') AS invoice_combo
+  FROM anomaly.`duplicate_ap_invoice`
+  GROUP BY Reason_Grouped, Matched_Record_Number
+),
+group_ranks AS (
+  SELECT 
+    Reason_Grouped,
+    invoice_combo,
+    DENSE_RANK() OVER (PARTITION BY Reason_Grouped ORDER BY invoice_combo) AS new_matched_record_number
+  FROM (
+    SELECT DISTINCT Reason_Grouped, invoice_combo FROM grouped_invoice_sets
+  ) AS combos
+),
+final_with_new_number AS (
+  SELECT 
+    a.*,
+    b.new_matched_record_number
+  FROM anomaly.`duplicate_ap_invoice` a
+  JOIN grouped_invoice_sets gis
+    ON a.Reason_Grouped = gis.Reason_Grouped
+   AND a.Matched_Record_Number = gis.Matched_Record_Number
+  JOIN group_ranks b
+    ON gis.Reason_Grouped = b.Reason_Grouped
+   AND gis.invoice_combo = b.invoice_combo
+)
+SELECT 
+  *
+FROM final_with_new_number
+where Matched_Record_Number <> new_matched_record_number
+ORDER BY Reason_Grouped, new_matched_record_number, Supplier_Invoice_Number) a
+
+
+=
+
+
+
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+100000000 
+where Reason_Grouped = 'Fuzzy' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice_new_match_records` 
+set new_matched_record_number = new_matched_record_number+110000000 
+where Reason_Grouped = 'Fuzzy, ML1.1' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+11100000 
+where Reason_Grouped = 'Fuzzy, ML1.1, ML2' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+112000000 
+where Reason_Grouped = 'Fuzzy, ML1.1, ML2, Same invoice details but different check details' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+113000000
+where Reason_Grouped = 'Fuzzy, ML1.1, Same invoice details but different check details' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+114000000
+where Reason_Grouped = 'Fuzzy, ML2' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+115000000 
+where Reason_Grouped = 'Fuzzy, Same invoice details but different check details' ;
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+116000000
+where Reason_Grouped = 'Fuzzy, Same supplier but discrepancies in invoice records' ;
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+117000000 
+where Reason_Grouped = 'ML1.1' ;
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+118000000
+where Reason_Grouped = 'ML1.1, ML2' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+119000000 
+where Reason_Grouped = 'ML1.1, ML2, Same Invoice but diffrent supplier' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+120000000 
+where Reason_Grouped = 'ML1.1, ML2, Same invoice details but different check details' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+121000000 
+where Reason_Grouped = 'ML1.1, Same Invoice but diffrent supplier' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+122000000 
+where Reason_Grouped = 'ML1.1, Same invoice details but different check details' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+123000000 
+where Reason_Grouped = 'ML1.1, Same invoice details but different check details, Same supplier but discrepancies in invoice records' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+124000000  
+where Reason_Grouped = 'ML1.3' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+125000000 
+where Reason_Grouped = 'ML1.3, Same Invoice but diffrent supplier' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+126000000  
+where Reason_Grouped = 'ML2' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+127000000 
+where Reason_Grouped = 'ML2, Same Invoice but diffrent supplier' ;
+
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+128000000  
+where Reason_Grouped = 'ML2, Same invoice details but different check details' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+129000000 
+where Reason_Grouped = 'Same Invoice but diffrent supplier' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+130000000 
+where Reason_Grouped = 'Same invoice details but different check details' ;
+
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+131000000
+where Reason_Grouped = 'Same invoice details but different check details, Same supplier but discrepancies in invoice records' ;
+
+
+
+
+update  anomaly.`duplicate_ap_invoice` 
+set new_matched_record_number = new_matched_record_number+132000000
+where Reason_Grouped = 'Same supplier but discrepancies in invoice records' ;
