@@ -1,0 +1,219 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[18]:
+
+
+# !jupyter nbconvert --to script Flag_For_Dates_Prod_140425.ipynb
+
+
+# In[2]:
+
+
+import pandas as pd
+import numpy as np
+from datetime import datetime
+from itertools import count
+from tqdm import tqdm
+import Levenshtein
+import re
+import ast
+import networkx as nx
+from sqlalchemy import create_engine
+import urllib
+import sys
+tqdm.pandas()
+a=pd.DataFrame()
+from itertools import combinations
+import gc
+
+
+# In[ ]:
+
+
+def KeyingErrorFlag():
+    def getDataFromDatabase():
+        #a = readEncryptedConfig(r'C:\Users\semen_k\Documents\Notebooks\Encryption_process\Config\Paths.xlsx', 'prod')
+        user = 'admin'
+        pwd = 'Gpoproddb!#!'
+        password = urllib.parse.quote_plus(pwd)
+        ip = 'prod-db.c969yoyq9cyy.us-east-1.rds.amazonaws.com'
+        schema = "anomaly"
+        engine = create_engine('mysql+mysqlconnector://{0}:{1}@{2}/{3}'.format(user, password, ip, schema))
+        query = "SELECT * FROM anomaly.duplicate_ap_invoice" #Source data
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn)
+        return df
+    df = getDataFromDatabase()
+    df = df.reset_index()
+    df['keying_error_flag']= None
+
+    df['Levenshtein'] = None
+    for mrn in df['Matched_Record_Number']:
+        mask = df['Matched_Record_Number'] ==mrn
+        sub_df = df[mask]
+        uni = sub_df['Supplier_Invoice_Number'].dropna().unique()
+        if len(uni)==2:
+            lev_dist = Levenshtein.distance(str(uni[0]), str(uni[1]))
+            df.loc[mask, 'Levenshtein'] = lev_dist
+    print(df[df['Levenshtein']==1].shape)
+    print(df[df['Levenshtein']==1]['Confirmed'].value_counts())
+    df.loc[df['Levenshtein']==1, 'keying_error_flag'] = 1
+    df['2digitsMissKeying']=None
+    for mrn in df[df['Levenshtein']==2]['Matched_Record_Number'].unique():
+        mask = (df['Matched_Record_Number'] ==mrn) & (df['Levenshtein']==2)
+        sub_df = df.loc[mask]
+        # display(sub_df[['Supplier_Invoice_Number','Lev']])
+        uni = sub_df['Supplier_Invoice_Number'].dropna().unique()
+        if len(uni)==2:
+            s1, s2 = str(uni[0]), str(uni[1])
+
+            if len(s1) == len(s2):
+                diff_idx = [i for i in range(len(s1)) if s1[i] != s2[i]]
+                # print(s1)
+                # print(s2)
+                # print(diff_idx)
+                # print("========")
+                if (
+                    len(diff_idx)==2 and
+                    diff_idx[1] == diff_idx[0] +1 and
+                    # list(s1)[diff_idx[0]], list(s1)[diff_idx[1]] == list(s2)[diff_idx[1]], list(s2)[diff_idx[0]]
+                    s1[diff_idx[0]] ==s2[diff_idx[1]] and
+                    s1[diff_idx[1]] ==s2[diff_idx[0]]
+                    
+                ):
+                    # print("yes")
+                    df.loc[mask, '2digitsMissKeying'] = 1
+    print(df[df['2digitsMissKeying']==1].shape)
+    print(df[df['2digitsMissKeying']==1]['Confirmed'].value_counts())
+    df.loc[df['2digitsMissKeying']==1, 'keying_error_flag'] = 1
+    df['Levenshtein_checkNumber'] = None
+    for mrn in df['Matched_Record_Number']:
+        mask = df['Matched_Record_Number'] ==mrn
+        sub_df = df[mask]
+        uni = sub_df['Check_Number'].dropna().unique()
+        if len(uni)==2:
+            lev_dist = Levenshtein.distance(str(uni[0]), str(uni[1]))
+            df.loc[mask, 'Levenshtein_checkNumber'] = lev_dist
+    print(df[df['Levenshtein_checkNumber']==1].shape)
+    print(df[df['Levenshtein_checkNumber']==1]['Confirmed'].value_counts())
+    df.loc[df['Levenshtein_checkNumber']==1, 'keying_error_flag'] = 1
+    df['2digitsMissKeying_checkNumber']=None
+    for mrn in df[df['Levenshtein_checkNumber']==2]['Matched_Record_Number'].unique():
+        mask = (df['Matched_Record_Number'] ==mrn) & (df['Levenshtein_checkNumber']==2)
+        sub_df = df.loc[mask]
+        # display(sub_df[['Supplier_Invoice_Number','Lev']])
+        uni = sub_df['Check_Number'].dropna().unique()
+        if len(uni)==2:
+            s1, s2 = str(uni[0]), str(uni[1])
+
+            if len(s1) == len(s2):
+                diff_idx = [i for i in range(len(s1)) if s1[i] != s2[i]]
+                # print(s1)
+                # print(s2)
+                # print(diff_idx)
+                # print("========")
+                if (
+                    len(diff_idx)==2 and
+                    diff_idx[1] == diff_idx[0] +1 and
+                    # list(s1)[diff_idx[0]], list(s1)[diff_idx[1]] == list(s2)[diff_idx[1]], list(s2)[diff_idx[0]]
+                    s1[diff_idx[0]] ==s2[diff_idx[1]] and
+                    s1[diff_idx[1]] ==s2[diff_idx[0]]
+                    
+                ):
+                    # print("yes")
+                    df.loc[mask, '2digitsMissKeying_checkNumber'] = 1
+        
+    print(df[df['2digitsMissKeying_checkNumber']==1].shape)
+    print(df[df['2digitsMissKeying_checkNumber']==1]['Confirmed'].value_counts())
+    df.loc[df['2digitsMissKeying_checkNumber']==1, 'keying_error_flag'] = 1
+    def max_consecutive_same(s1, s2):
+        m = len(s1)
+        n = len(s2)
+        max_len = 0
+        end = 0
+        dp = [[0]*(n+1) for _ in range (m+1)]
+        for i in range (m):
+            for j in range(n):
+                if s1[i] == s2[j]:
+                    dp[i+1][j+1] =dp[i][j] +1
+                    if dp[i+1][j+1] > max_len:
+                        max_len = dp[i+1][j+1]
+                        end = i+1
+        return max_len
+    df['A'] = None
+    df['B'] = None
+    for mrn in df['Matched_Record_Number'].unique():
+        mask = df['Matched_Record_Number']==mrn
+        sub = df.loc[mask]
+        unique_suppl = sub['Supplier_Invoice_Number'].unique()
+        if len(unique_suppl)==2:
+            s1, s2 = str(unique_suppl[0]), str(unique_suppl[1])
+            lcs_len = max_consecutive_same(s1, s2)
+            df.loc[mask, 'A'] = lcs_len
+            df.loc[mask, 'B'] = sub['Supplier_Invoice_Number'].astype(str).apply(lambda x: lcs_len / len(x) if len(x) > 0 else 0)
+            
+    df['C'] = 0
+    for mrn in df['Matched_Record_Number'].unique():
+        mask = df['Matched_Record_Number']==mrn
+        sub = df.loc[mask]
+        if sub['Supplier_Invoice_Number'].nunique() ==2:
+            cond1 = (sub['B']==1).any()
+            cond2 =  (sub[sub['B']>0.74]['Supplier_Invoice_Number'].nunique()>1)
+            cond3 = (sub[sub['A']>=8]['Supplier_Invoice_Number'].nunique()>1)
+            if cond1 or cond2 or cond3:
+                df.loc[mask, 'C'] =1
+    print(df[df['C']==1].shape)
+    print(df[df['C']==1]['Confirmed'].value_counts())
+    df.loc[df['C']==1, 'keying_error_flag'] = 1            
+    df['date_in_invoice_number_flag'] = df['date_in_invoice_number_flag'].fillna(0)
+    df.sort_values(by="index", ascending =True, inplace=True)
+    df.drop(columns=['index', 'Levenshtein', '2digitsMissKeying', 'Levenshtein_checkNumber','2digitsMissKeying_checkNumber', 'A',  'B', 'C'], inplace=True)
+    def uploadOutput(output):
+        #a = readEncryptedConfig(r'C:\Users\semen_k\Documents\Notebooks\Encryption_process\Config\Paths.xlsx', 'prod')
+        user = 'admin'
+        pwd = 'Gpoproddb!#!'
+        password = urllib.parse.quote_plus(pwd)
+        ip = 'prod-db.c969yoyq9cyy.us-east-1.rds.amazonaws.com'
+        schema = "anomaly"
+        engine = create_engine('mysql+mysqlconnector://{0}:{1}@{2}/{3}'.format(user, password, ip, schema))
+        table_name = 'duplicate_ap_invoice_keying_chicago_item_feb2026_v3' #output
+        output.to_sql(table_name, con = engine, if_exists='replace', index=False, chunksize=5000)
+    uploadOutput(df)
+
+
+# In[ ]:
+
+
+
+
+
+# In[7]:
+
+
+def main():
+
+    #if len(sys.argv) != 4:
+    #    print ("Incorrect parm. Program needs ONLY 3 parameters to execute")
+    #    sys.exit(1)
+
+    #user_name = sys.argv[1]
+    #execution_id = sys.argv[2]
+    #file_name = sys.argv[1]
+    KeyingErrorFlag()
+
+
+    return
+
+
+# In[8]:
+
+
+if __name__ == "__main__":
+
+    main()
+    exit()
+
+
+# In[ ]:
+
