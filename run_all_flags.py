@@ -741,7 +741,7 @@ def main():
     engine = get_engine()
 
     # Step 1: Create target table
-    step1_create_target_table(engine)
+    #step1_create_target_table(engine)
 
     # Step 2: Alter target table – add all flag columns
     step2_alter_target_table(engine)
